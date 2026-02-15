@@ -96,6 +96,30 @@ class XAPIClient:
             logger.error(f"ツイート投稿失敗: {e}")
             return {"success": False, "error": str(e), "text": text}
 
+    def like_tweet(self, tweet_id: str) -> bool:
+        """
+        ツイートにいいねをする。
+
+        Args:
+            tweet_id: いいねするツイートのID
+
+        Returns:
+            成功したかどうか
+        """
+        try:
+            self.client.like(tweet_id)
+            logger.info(f"いいね成功: ID={tweet_id}")
+            return True
+        except tweepy.errors.Forbidden as e:
+            # 既にいいねしている場合は無視
+            if "already liked" in str(e).lower():
+                return True
+            logger.error(f"いいね失敗 (権限不足): {e}")
+            return False
+        except tweepy.TweepyException as e:
+            logger.error(f"いいね失敗: {e}")
+            return False
+
     def get_mentions(self, since_id: Optional[str] = None, max_results: int = 10) -> list[dict]:
         """
         自分へのメンションを取得する。

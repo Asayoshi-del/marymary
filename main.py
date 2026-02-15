@@ -281,6 +281,9 @@ def main():
     parser.add_argument(
         "--reply", action="store_true", help="メンションをチェックして自動返信を実行"
     )
+    parser.add_argument(
+        "--engage", action="store_true", help="エゴサ（キーワード検索）していいねを実行"
+    )
 
     args = parser.parse_args()
 
@@ -316,10 +319,11 @@ def main():
             args.dry_run = True
 
     # 単発実行モード（GitHub Actions用）
-    if args.execute_scheduled or args.cron or args.reply:
+    if args.execute_scheduled or args.cron or args.reply or args.engage:
         from src.scheduler import PostScheduler
         from src.reply_handler import ReplyHandler
         from src.content_engine import ContentEngine
+        from src.engagement_handler import EngagementHandler
 
         # スケジュール投稿のチェック
         if args.execute_scheduled or args.cron:
@@ -338,6 +342,13 @@ def main():
             print("\n📩 メンションをチェック中...")
             replier.run(dry_run=args.dry_run)
             print("✅ メンションチェック完了")
+        
+        # エゴサ・いいねのチェック
+        if args.engage or args.cron:
+            engager = EngagementHandler(api_client=api_client)
+            print("\n🔍 エゴサ・いいねを実行中...")
+            engager.run_ego_search_and_like(dry_run=args.dry_run)
+            print("✅ エゴサ・いいね完了")
         
         return
 
