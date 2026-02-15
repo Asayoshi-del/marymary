@@ -42,5 +42,5 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/scheduled.json data/post_history.json data/reply_state.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update post/reply status [skip ci]" && git push)
+          git add data/scheduled.json data/post_history.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update post status [skip ci]" && git push)

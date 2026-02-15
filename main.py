@@ -331,8 +331,8 @@ def main():
             else:
                 print("📭 現在、実行待ちの予約投稿はありません")
 
-        # 自動リプライのチェック
-        if args.reply or args.cron:
+        # 自動リプライのチェック（明示的に --reply が指定された場合のみ）
+        if args.reply:
             engine = ContentEngine()
             replier = ReplyHandler(api_client=api_client, content_engine=engine)
             print("\n📩 メンションをチェック中...")
