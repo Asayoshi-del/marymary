@@ -124,6 +124,51 @@ class ContentEngine:
 
         raise ValueError(f"ツイート生成に{max_retries}回失敗しました。")
 
+    def generate_reply(
+        self,
+        mention_text: str,
+        author_username: str,
+        context_tweets: list[str] | None = None
+    ) -> str:
+        """
+        メンションに対する返信を生成する。
+
+        Args:
+            mention_text: 相手の投稿テキスト
+            author_username: 相手のユーザーネーム
+            context_tweets: 会話の文脈（あれば）
+
+        Returns:
+            返信テキスト
+        """
+        system_prompt = f"""{PERSONA}
+
+【返信のルール】
+1. 相手の言葉に対して、鋭い洞察や有益なアドバイス（AI戦略家として）を返すこと
+2. 媚びたり、当たり障りのない挨拶だけで終わらせないこと
+3. 「だ・である」調を維持し、100文字〜130文字程度で密度を高めること
+4. 相手のユーザー名（@{author_username}）を文頭に含めること
+5. ハッシュタグ、URLは含めない
+"""
+        user_prompt = f"以下のユーザーからの投稿に対して、返信を1件作成してください。\n\n【相手の投稿】\n@{author_username}: {mention_text}"
+        
+        if context_tweets:
+            user_prompt += "\n\n【会話の以前の流れ】\n" + "\n".join(context_tweets)
+
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=300,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                temperature=0.7,
+            )
+            reply_text = response.content[0].text.strip()
+            return self._clean_output(reply_text)
+        except Exception as e:
+            logger.error(f"返信生成失敗: {e}")
+            raise
+
     def generate_batch(
         self,
         count: int = 10,

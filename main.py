@@ -278,6 +278,9 @@ def main():
     parser.add_argument(
         "--cron", action="store_true", help="時間が来た投稿を確認して実行（--execute-scheduled のエイリアス）"
     )
+    parser.add_argument(
+        "--reply", action="store_true", help="メンションをチェックして自動返信を実行"
+    )
 
     args = parser.parse_args()
 
@@ -313,16 +316,29 @@ def main():
             args.dry_run = True
 
     # 単発実行モード（GitHub Actions用）
-    if args.execute_scheduled or args.cron:
+    if args.execute_scheduled or args.cron or args.reply:
         from src.scheduler import PostScheduler
+        from src.reply_handler import ReplyHandler
+        from src.content_engine import ContentEngine
 
-        scheduler = PostScheduler(api_client=api_client)
-        print("\n⏳ 予約投稿をチェック中...")
-        results = scheduler.execute_scheduled(dry_run=args.dry_run)
-        if results:
-            print(f"✅ {len(results)} 件の投稿を実行しました")
-        else:
-            print("📭 現在、実行待ちの予約投稿はありません")
+        # スケジュール投稿のチェック
+        if args.execute_scheduled or args.cron:
+            scheduler = PostScheduler(api_client=api_client)
+            print("\n⏳ 予約投稿をチェック中...")
+            results = scheduler.execute_scheduled(dry_run=args.dry_run)
+            if results:
+                print(f"✅ {len(results)} 件の投稿を実行しました")
+            else:
+                print("📭 現在、実行待ちの予約投稿はありません")
+
+        # 自動リプライのチェック
+        if args.reply or args.cron:
+            engine = ContentEngine()
+            replier = ReplyHandler(api_client=api_client, content_engine=engine)
+            print("\n📩 メンションをチェック中...")
+            replier.run(dry_run=args.dry_run)
+            print("✅ メンションチェック完了")
+        
         return
 
     # デーモンモード

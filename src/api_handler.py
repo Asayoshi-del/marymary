@@ -70,12 +70,13 @@ class XAPIClient:
                 raise ValueError(f"ユーザー @{self.username} が見つかりません。")
         return self._user_id
 
-    def post_tweet(self, text: str) -> dict:
+    def post_tweet(self, text: str, reply_to_id: Optional[str] = None) -> dict:
         """
-        ツイートを投稿する。
+        ツイートを投稿する（返信も可能）。
 
         Args:
             text: 投稿テキスト（140文字以内）
+            reply_to_id: 返信先のツイートID（任意）
 
         Returns:
             投稿結果の辞書
@@ -84,13 +85,60 @@ class XAPIClient:
             raise ValueError(f"ツイートが140文字を超えています ({len(text)}文字)")
 
         try:
-            response = self.client.create_tweet(text=text)
+            response = self.client.create_tweet(
+                text=text,
+                in_reply_to_tweet_id=reply_to_id
+            )
             tweet_id = response.data["id"]
-            logger.info(f"ツイート投稿成功: ID={tweet_id}")
+            logger.info(f"ツイート投稿成功: ID={tweet_id}{' (Reply)' if reply_to_id else ''}")
             return {"success": True, "tweet_id": tweet_id, "text": text}
         except tweepy.TweepyException as e:
             logger.error(f"ツイート投稿失敗: {e}")
             return {"success": False, "error": str(e), "text": text}
+
+    def get_mentions(self, since_id: Optional[str] = None, max_results: int = 10) -> list[dict]:
+        """
+        自分へのメンションを取得する。
+
+        Args:
+            since_id: このIDより後のメンションのみ取得
+            max_results: 取得件数
+
+        Returns:
+            メンションのリスト
+        """
+        try:
+            mentions = self.client.get_users_mentions(
+                id=self.user_id,
+                since_id=since_id,
+                max_results=max_results,
+                tweet_fields=["created_at", "author_id", "text", "conversation_id"],
+                expansions=["author_id"],
+            )
+
+            if not mentions.data:
+                return []
+
+            # ユーザー情報のマッピング作成
+            users = {str(u.id): u.username for u in mentions.includes["users"]} if mentions.includes else {}
+
+            results = []
+            for tweet in mentions.data:
+                author_id = str(tweet.author_id)
+                results.append({
+                    "id": str(tweet.id),
+                    "text": tweet.text,
+                    "author_id": author_id,
+                    "author_username": users.get(author_id, "unknown"),
+                    "created_at": str(tweet.created_at) if tweet.created_at else None,
+                    "conversation_id": str(tweet.conversation_id) if tweet.conversation_id else None,
+                })
+            
+            logger.info(f"メンション {len(results)} 件取得完了")
+            return results
+        except tweepy.TweepyException as e:
+            logger.error(f"メンション取得失敗: {e}")
+            return []
 
     def get_user_tweets(self, max_results: int = 50) -> list[dict]:
         """

@@ -1,11 +1,12 @@
 [
   {
     "text": "これはGitHub Actionsによる自動投稿のテストです。PCを閉じても正常に動作していることを確認するための投稿です。",
-    "status": "pending",
+    "status": "posted",
     "created_at": "2026-02-16T00:18:00",
-    "posted_at": null,
+    "posted_at": "2026-02-16T00:17:35.211905",
     "scheduled_time": "2026-02-16T00:15:00",
-    "period": "test"
+    "period": "test",
+    "tweet_id": "2023054085738627255"
   },
   {
     "text": "AIツールって結局「使いこなせる人」と「使えない人」で格差が生まれるんですよね。",
