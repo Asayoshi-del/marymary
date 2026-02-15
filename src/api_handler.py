@@ -120,6 +120,32 @@ class XAPIClient:
             logger.error(f"いいね失敗: {e}")
             return False
 
+    def quote_tweet(self, text: str, quote_tweet_id: str) -> dict:
+        """
+        引用ツイートを投稿する。
+
+        Args:
+            text: 引用時のコメント
+            quote_tweet_id: 引用元ツイートのID
+
+        Returns:
+            投稿結果の辞書
+        """
+        if len(text) > 140:
+             raise ValueError(f"引用コメントが140文字を超えています ({len(text)}文字)")
+
+        try:
+            response = self.client.create_tweet(
+                text=text,
+                quote_tweet_id=quote_tweet_id
+            )
+            tweet_id = response.data["id"]
+            logger.info(f"引用ツイート成功: ID={tweet_id}")
+            return {"success": True, "tweet_id": tweet_id, "text": text}
+        except tweepy.TweepyException as e:
+            logger.error(f"引用ツイート失敗: {e}")
+            return {"success": False, "error": str(e), "text": text}
+
     def get_mentions(self, since_id: Optional[str] = None, max_results: int = 10) -> list[dict]:
         """
         自分へのメンションを取得する。

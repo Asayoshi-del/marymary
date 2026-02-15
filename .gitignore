@@ -3,6 +3,7 @@ data/research_results.json
 data/style_profile.json
 data/past_tweets.json
 data/reply_state.json
+data/engagement_state.json
 *.log
 __pycache__/
 *.pyc

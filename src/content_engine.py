@@ -179,6 +179,54 @@ class ContentEngine:
 
         raise ValueError("返信の文字数制限をクリアできませんでした。")
 
+    def generate_quote_comment(
+        self,
+        original_tweet_text: str,
+        max_retries: int = 3
+    ) -> str:
+        """
+        引用ツイート用のコメントを生成する。
+
+        Args:
+            original_tweet_text: 引用元のツイート内容
+
+        Returns:
+            コメントテキスト
+        """
+        system_prompt = f"""{PERSONA}
+
+【引用ツイートのルール】
+1. 引用元の内容に対して、補足、反論、または独自の付加価値（AI戦略家としての視点）を加えること
+2. 感情的な反応ではなく、論理的で鋭い分析を行うこと
+3. 単なる賛成や紹介ではなく、読者が「なるほど」と思う新しい切り口を提示すること
+4. 「だ・である」調の断定形で、100文字〜130文字程度で密度を高めること
+5. ハッシュタグ、URLは含めない
+"""
+        user_prompt = f"以下の投稿を引用して、あなたの専門的な見解を添えてください。\n\n【引用元】\n{original_tweet_text}"
+
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=300,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    temperature=0.7,
+                )
+                comment_text = response.content[0].text.strip()
+                comment_text = self._clean_output(comment_text)
+
+                if len(comment_text) <= 140:
+                    return comment_text
+                
+                logger.warning(f"引用コメント文字数超過 ({len(comment_text)}文字) - リトライ中...")
+                user_prompt += f"\n\n※前回の出力は140文字を超えていました。必ず140文字以内に短縮してください。"
+            except Exception as e:
+                logger.error(f"引用コメント生成失敗: {e}")
+                raise
+
+        raise ValueError("引用コメントの文字数制限をクリアできませんでした。")
+
     def generate_batch(
         self,
         count: int = 10,

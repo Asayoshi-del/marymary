@@ -310,13 +310,11 @@ def main():
         print("✅ 投稿済みアイテムをクリアしました")
         return
 
-    # APIクライアントセットアップ
-    api_client = None
-    if not args.dry_run:
-        api_client = setup_api_client()
-        if not api_client:
-            print("\n⚠️  APIキーが未設定です。ドライランモードで続行します。")
-            args.dry_run = True
+    # APIクライアントセットアップ (検索などの読み取り用)
+    api_client = setup_api_client()
+    if not api_client:
+        print("\n⚠️  APIキーが未設定、または初期化に失敗しました。完全なドライランモードで続行します。")
+        args.dry_run = True
 
     # 単発実行モード（GitHub Actions用）
     if args.execute_scheduled or args.cron or args.reply or args.engage:
@@ -343,12 +341,17 @@ def main():
             replier.run(dry_run=args.dry_run)
             print("✅ メンションチェック完了")
         
-        # エゴサ・いいねのチェック
+        # エゴサ・いいね・引用RTのチェック
         if args.engage or args.cron:
-            engager = EngagementHandler(api_client=api_client)
+            engine = ContentEngine()
+            engager = EngagementHandler(api_client=api_client, content_engine=engine)
             print("\n🔍 エゴサ・いいねを実行中...")
             engager.run_ego_search_and_like(dry_run=args.dry_run)
-            print("✅ エゴサ・いいね完了")
+            
+            print("\n🔁 引用リツイートをチェック中...")
+            engager.run_quote_retweet(dry_run=args.dry_run)
+            
+            print("✅ エンゲージメント処理完了")
         
         return
 
