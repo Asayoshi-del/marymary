@@ -128,7 +128,8 @@ class ContentEngine:
         self,
         mention_text: str,
         author_username: str,
-        context_tweets: list[str] | None = None
+        context_tweets: list[str] | None = None,
+        max_retries: int = 3,
     ) -> str:
         """
         メンションに対する返信を生成する。
@@ -155,19 +156,28 @@ class ContentEngine:
         if context_tweets:
             user_prompt += "\n\n【会話の以前の流れ】\n" + "\n".join(context_tweets)
 
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=300,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-                temperature=0.7,
-            )
-            reply_text = response.content[0].text.strip()
-            return self._clean_output(reply_text)
-        except Exception as e:
-            logger.error(f"返信生成失敗: {e}")
-            raise
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=300,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    temperature=0.7,
+                )
+                reply_text = response.content[0].text.strip()
+                reply_text = self._clean_output(reply_text)
+
+                if len(reply_text) <= 140:
+                    return reply_text
+                
+                logger.warning(f"返信文字数超過 ({len(reply_text)}文字) - リトライ中...")
+                user_prompt += f"\n\n※前回の出力は140文字を超えていました。必ず140文字以内に短縮してください。"
+            except Exception as e:
+                logger.error(f"返信生成失敗: {e}")
+                raise
+
+        raise ValueError("返信の文字数制限をクリアできませんでした。")
 
     def generate_batch(
         self,
