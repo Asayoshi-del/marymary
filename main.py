@@ -132,12 +132,32 @@ def generate_tweets(style_prompt, reference_tweets, count=10):
     """ツイート生成"""
     from src.content_engine import ContentEngine
 
+    # ユーザーのアイデアを読み込む
+    user_thoughts = None
+    ideas_path = os.path.join(os.path.dirname(__file__), "data", "ideas.txt")
+    if os.path.exists(ideas_path):
+        try:
+            with open(ideas_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                # コメント行を除去して有効なテキストのみ抽出
+                lines = [l for l in content.split("\n") if not l.strip().startswith("#")]
+                cleaned_thoughts = "\n".join(lines).strip()
+                if cleaned_thoughts:
+                    user_thoughts = cleaned_thoughts
+                    print(f"\n💡 ユーザーの思考メモを読み込みました:\n{'-'*40}\n{user_thoughts[:100]}...\n{'-'*40}")
+        except Exception as e:
+            logger.warning(f"アイデアファイルの読み込み失敗: {e}")
+
     engine = ContentEngine(style_prompt=style_prompt)
 
     ref_texts = [t["text"] for t in reference_tweets[:5]] if reference_tweets else None
 
     print(f"\n✍️  ツイートを {count} 件生成中...")
-    tweets = engine.generate_batch(count=count, reference_tweets=ref_texts)
+    tweets = engine.generate_batch(
+        count=count,
+        reference_tweets=ref_texts,
+        user_thoughts=user_thoughts
+    )
     print(f"  生成完了: {len(tweets)} 件")
     return tweets
 
@@ -197,8 +217,8 @@ def schedule_tweets(approved_tweets: list[str], api_client):
     scheduler = PostScheduler(api_client=api_client)
     scheduler.stock_tweets(approved_tweets)
 
-    # タイムスロットを割り当て
-    pending = scheduler.get_pending_tweets(count=len(approved_tweets))
+    # タイムスロットを割り当て（最大10件まで）
+    pending = scheduler.get_pending_tweets(count=10)
     assigned = scheduler.assign_time_slots(pending)
 
     # 更新を保存
@@ -252,6 +272,12 @@ def main():
     parser.add_argument(
         "--post-now", action="store_true", help="生成後すぐに投稿する（GitHub Actions用）"
     )
+    parser.add_argument(
+        "--execute-scheduled", action="store_true", help="時間が来た予約投稿を1回のみ実行（GitHub Actions用）"
+    )
+    parser.add_argument(
+        "--cron", action="store_true", help="時間が来た投稿を確認して実行（--execute-scheduled のエイリアス）"
+    )
 
     args = parser.parse_args()
 
@@ -285,6 +311,19 @@ def main():
         if not api_client:
             print("\n⚠️  APIキーが未設定です。ドライランモードで続行します。")
             args.dry_run = True
+
+    # 単発実行モード（GitHub Actions用）
+    if args.execute_scheduled or args.cron:
+        from src.scheduler import PostScheduler
+
+        scheduler = PostScheduler(api_client=api_client)
+        print("\n⏳ 予約投稿をチェック中...")
+        results = scheduler.execute_scheduled(dry_run=args.dry_run)
+        if results:
+            print(f"✅ {len(results)} 件の投稿を実行しました")
+        else:
+            print("📭 現在、実行待ちの予約投稿はありません")
+        return
 
     # デーモンモード
     if args.run:

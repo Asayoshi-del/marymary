@@ -183,32 +183,32 @@ class StyleAnalyzer:
         return {k: round(v / total * 100, 1) for k, v in markers.items()}
 
     def _default_profile(self) -> dict:
-        """デフォルトのスタイルプロファイル（AIマネタイズ専門家・啓発系）"""
+        """デフォルトのスタイルプロファイル（AI戦略家・断定調）"""
         return {
             "total_tweets_analyzed": 0,
             "endings": [
-                ("ます", 0, 30.0),
-                ("です", 0, 30.0),
-                ("だ", 0, 20.0),
-                ("ですね", 0, 10.0),
-                ("でしょう", 0, 10.0),
+                ("だ", 0, 40.0),
+                ("である", 0, 30.0),
+                ("だろう", 0, 10.0),
+                ("ない", 0, 15.0),
+                ("する", 0, 5.0),
             ],
             "char_ratios": {
-                "kanji_pct": 30.0,
-                "hiragana_pct": 55.0,
+                "kanji_pct": 40.0,
+                "hiragana_pct": 45.0,
                 "katakana_pct": 10.0,
                 "other_pct": 5.0,
             },
             "frequent_phrases": [],
-            "avg_length": 110,
-            "length_distribution": {"min": 60, "max": 140, "avg": 110},
+            "avg_length": 120,
+            "length_distribution": {"min": 80, "max": 140, "avg": 120},
             "tone_markers": {
-                "assertive": 10.0,
-                "questioning": 20.0,
-                "reflective": 30.0,
-                "instructive": 40.0,
+                "assertive": 60.0,
+                "questioning": 5.0,
+                "reflective": 15.0,
+                "instructive": 20.0,
             },
-            "note": "デフォルトプロファイル（AIマネタイズ専門家・啓発系）",
+            "note": "デフォルトプロファイル（AI戦略家・断定調）",
         }
 
     def get_style_prompt_fragment(self, profile: Optional[dict] = None) -> str:

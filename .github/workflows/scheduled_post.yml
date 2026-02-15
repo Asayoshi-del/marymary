@@ -1,0 +1,46 @@
+name: Scheduled Post
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # 15分おきに実行して予約時間をチェック
+  workflow_dispatch:      # 手動での実行も可能
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # 投稿ステータスを更新するために書き込み権限が必要
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Execute scheduled posts
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          X_USERNAME: ${{ secrets.X_USERNAME }}
+        run: python main.py --execute-scheduled
+        
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/scheduled.json data/post_history.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update post status [skip ci]" && git push)

@@ -1,5 +1,7 @@
 .env
-data/*.json
+data/research_results.json
+data/style_profile.json
+data/past_tweets.json
 *.log
 __pycache__/
 *.pyc

@@ -17,13 +17,13 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # ペルソナ定義
-PERSONA = """あなたは「次世代の生き方を提唱するAIマネタイズ専門家」です。
+PERSONA = """あなたは「次世代の生き方を提唱するAI戦略家」です。
 以下の属性を持っています：
-- 最先端のAI技術（Claude, GPT, Gemini, OpenSource）に精通しているが、技術オタクではない
+- 最先端のAI技術（Claude, GPT, Gemini, OpenSource）に精通している
 - 「AIを使って人生をどう変えるか」「どう稼ぐか」という実利的な視点を重視する
-- 読者に「自分もできるかも」「人生が変わる予感がする」という希望を与える
-- 口調は柔らかく丁寧だが、芯のある「です・ます」調（たまに「だ・である」を混ぜてリズムを作る）
-- 読者に寄り添いつつ、行動を促すメンター的な存在"""
+- 読者に媚びず、本質的で耳の痛いこともズバッと言う
+- 口調は「だ・である」調（断定形）で統一する。質問形や「〜しましょう」といった呼びかけは避ける
+- 感情的な装飾を排し、論理と洞察で語る"""
 
 # 禁止表現（過度な煽りや投資助言回避）
 BANNED_EXPRESSIONS = [
@@ -67,6 +67,7 @@ class ContentEngine:
         self,
         theme: str = "",
         reference_tweets: list[str] | None = None,
+        user_thoughts: str | None = None,
         max_retries: int = 3,
     ) -> str:
         """
@@ -75,17 +76,18 @@ class ContentEngine:
         Args:
             theme: 投稿テーマ（空の場合はランダム選択）
             reference_tweets: 参考にするバズ投稿テキストリスト
+            user_thoughts: ユーザーの思考メモ（最優先で使用）
             max_retries: 文字数超過時のリトライ回数
 
         Returns:
             生成されたツイートテキスト
         """
-        if not theme:
+        if not theme and not user_thoughts:
             import random
             theme = random.choice(CONTENT_THEMES)
 
         system_prompt = self._build_system_prompt()
-        user_prompt = self._build_user_prompt(theme, reference_tweets)
+        user_prompt = self._build_user_prompt(theme, reference_tweets, user_thoughts)
 
         for attempt in range(max_retries):
             try:
@@ -104,8 +106,9 @@ class ContentEngine:
                 # バリデーション
                 is_valid, issue = self.validate_tweet(tweet_text)
                 if is_valid:
+                    source = "思考メモ" if user_thoughts else f"テーマ: {theme}"
                     logger.info(
-                        f"ツイート生成成功 ({len(tweet_text)}文字, テーマ: {theme})"
+                        f"ツイート生成成功 ({len(tweet_text)}文字, {source})"
                     )
                     return tweet_text
 
@@ -125,44 +128,109 @@ class ContentEngine:
         self,
         count: int = 10,
         reference_tweets: list[str] | None = None,
+        user_thoughts: str | None = None,
     ) -> list[str]:
         """
         複数のツイートを一括生成する。
+        user_thoughtsがある場合は、内容の重複を避けるために一括でプロンプトを送り、
+        多様な視点から生成させる。
 
         Args:
             count: 生成件数
             reference_tweets: 参考バズ投稿リスト
+            user_thoughts: ユーザーの思考メモ
 
         Returns:
             生成されたツイートリスト
         """
-        import random
+        if user_thoughts:
+            return self._generate_varied_batch_from_thoughts(count, reference_tweets, user_thoughts)
 
+        # 通常のテーマベース生成（ループ）
+        import random
         tweets = []
         themes = random.sample(CONTENT_THEMES, min(count, len(CONTENT_THEMES)))
-        # 足りない分はランダムで追加
         while len(themes) < count:
             themes.append(random.choice(CONTENT_THEMES))
 
         for i, theme in enumerate(themes):
             try:
                 tweet = self.generate_tweet(
-                    theme=theme, reference_tweets=reference_tweets
+                    theme=theme,
+                    reference_tweets=reference_tweets,
+                    user_thoughts=None,
                 )
                 tweets.append(tweet)
                 logger.info(f"バッチ生成 [{i + 1}/{count}] 完了")
             except Exception as e:
                 logger.error(f"バッチ生成 [{i + 1}/{count}] 失敗: {e}")
                 continue
-
         return tweets
+
+    def _generate_varied_batch_from_thoughts(
+        self, count: int, reference_tweets: list[str] | None, user_thoughts: str
+    ) -> list[str]:
+        """思考メモから、重複のない多様なツイートを生成する"""
+        system_prompt = self._build_system_prompt()
+        
+        user_prompt = f"""以下の【ユーザーの思考メモ】を読み込み、内容が重複しないように {count} 件の異なる投稿を作成してください。
+
+【戦略】
+1. メモの中の異なるセクション、異なる視点、異なるエピソードに焦点を当てて、1つずつ独立した投稿にすること。
+2. 全体として1つのストーリーにするのではなく、それぞれが単体で完結する「強い」投稿にすること。
+3. すべて「だ・である」調の断定形で、ペルソナ（AI戦略家）らしい鋭い洞察を含めること。
+
+【ユーザーの思考メモ】
+{user_thoughts}
+"""
+        if reference_tweets:
+            user_prompt += "\n【構造の参考】\n"
+            for i, ref in enumerate(reference_tweets[:2], 1):
+                user_prompt += f"参考{i}: {ref}\n"
+
+        user_prompt += f"\n出力形式：\n1. [投稿テキスト]\n2. [投稿テキスト]\n...(合計 {count} 件)"
+
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                temperature=0.7,
+            )
+
+            raw_output = response.content[0].text.strip()
+            # 番号付きリストを分割
+            items = re.split(r"\n\d+[\.\)]\s*", "\n" + raw_output)
+            tweets = [self._clean_output(it.strip()) for it in items if it.strip()]
+            
+            # バリデーション済みのものだけ採用
+            valid_tweets = []
+            for t in tweets:
+                is_valid, _ = self.validate_tweet(t)
+                if is_valid:
+                    valid_tweets.append(t)
+            
+            # 足りない場合は個別に補完（再帰はせず、テーマなしで生成）
+            while len(valid_tweets) < count:
+                try:
+                    t = self.generate_tweet(user_thoughts=user_thoughts)
+                    valid_tweets.append(t)
+                except:
+                    break
+            
+            return valid_tweets[:count]
+
+        except Exception as e:
+            logger.error(f"多様なバッチ生成に失敗: {e}")
+            return []
 
     def _build_system_prompt(self) -> str:
         """システムプロンプトを構築"""
         prompt = f"""{PERSONA}
 
 【絶対ルール】
-1. 必ず140文字以内で投稿テキストのみを出力すること（説明や注釈は不要）
+1. 110文字〜135文字程度で、内容の濃い投稿テキストを出力すること
 2. ハッシュタグ（#）は絶対に使用しない
 3. 投資助言に該当する断定的表現は避ける（「買い」「売り」「必ず儲かる」等は禁止）
 4. 思考法やトレンドの紹介に留め、具体的な銘柄推奨はしない
@@ -172,10 +240,17 @@ class ContentEngine:
         return prompt
 
     def _build_user_prompt(
-        self, theme: str, reference_tweets: list[str] | None
+        self, theme: str, reference_tweets: list[str] | None, user_thoughts: str | None
     ) -> str:
         """ユーザープロンプトを構築"""
-        prompt = f"以下のテーマで、X（旧Twitter）の投稿テキストを1件だけ生成してください。\n\nテーマ: {theme}\n"
+        prompt = ""
+
+        if user_thoughts:
+            prompt += f"以下の【ユーザーが今考えていること・伝えたいこと】を最優先で反映し、投稿を作成してください。\n"
+            prompt += f"この内容を、ペルソナ（AI戦略家）の視点で深掘り・昇華させてください。\n\n"
+            prompt += f"【ユーザーの思考メモ】\n{user_thoughts}\n\n"
+        
+        prompt += f"以下のテーマ（切り口）も参考にしてください。\nテーマ: {theme}\n"
 
         if reference_tweets:
             prompt += "\n【参考にすべきバズ投稿の構造・リズム】\n"
@@ -183,7 +258,7 @@ class ContentEngine:
                 prompt += f"参考{i}: {ref}\n"
             prompt += "\n上記のバズ投稿の構造やリズムを参考にしつつ、独自の内容を生成してください。\n"
 
-        prompt += "\n投稿テキストのみを出力してください（140文字以内、説明不要）。"
+        prompt += "\n投稿テキストのみを出力してください（120文字前後を目指してください）。"
         return prompt
 
     def _clean_output(self, text: str) -> str:
@@ -194,10 +269,9 @@ class ContentEngine:
         text = re.sub(r"^\*+|\*+$", "", text)
         # 先頭の番号を除去
         text = re.sub(r"^\d+[\.\)]\s*", "", text)
-        # 複数行の場合は最初の行のみ
+        # 複数行の場合は改行を維持しつつ連結
         if "\n" in text:
-            lines = [l.strip() for l in text.split("\n") if l.strip()]
-            text = lines[0] if lines else text
+             return text.strip()
         return text.strip()
 
     def validate_tweet(self, text: str) -> tuple[bool, str]:
@@ -208,10 +282,11 @@ class ContentEngine:
             (is_valid, issue_description)
         """
         # 文字数チェック
-        if len(text) > 140:
-            return False, f"文字数超過 ({len(text)}文字)"
-        if len(text) < 10:
-            return False, f"文字数不足 ({len(text)}文字)"
+        length = len(text)
+        if length > 140:
+            return False, f"文字数超過 ({length}文字)"
+        if length < 60:
+            return False, f"文字数不足 ({length}文字) - もっと内容を充実させてください"
 
         # ハッシュタグチェック
         if "#" in text or "＃" in text:
