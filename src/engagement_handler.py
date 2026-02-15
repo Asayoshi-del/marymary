@@ -80,8 +80,9 @@ class EngagementHandler:
 
         logger.info("引用RT用の投稿を探索中...")
         # ターゲットキーワードから1つランダムに選ぶ、または「AI」などで広く検索
-        target_kw = "AIエージェント OR AIツール"
-        tweets = self.api.search_tweets(query=f"{target_kw} -is:retweet min_faves:50", max_results=10)
+        # Basicプランでも使える標準的なクエリを使用
+        target_kw = "(AIエージェント OR AIツール) lang:ja -is:retweet"
+        tweets = self.api.search_tweets(query=target_kw, max_results=10)
 
         if not tweets:
             logger.info("引用RTに適した話題が見つかりませんでした。")
