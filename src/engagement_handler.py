@@ -9,16 +9,24 @@ class EngagementHandler:
 
     def __init__(self, api_client):
         self.api = api_client
-        self.keywords = ["claude code", "OpenClaw"]
+        self.keywords = [
+            "claude code",
+            "OpenClaw",
+            "AIツール",
+            "antigravity",
+            "AIエージェント",
+            "cursor",
+            "マーケ"
+        ]
 
-    def run_ego_search_and_like(self, max_per_keyword: int = 5, dry_run: bool = False):
+    def run_ego_search_and_like(self, max_per_keyword: int = 20, dry_run: bool = False):
         """キーワードで検索していいねをする"""
         logger.info(f"エゴサ開始: キーワード={self.keywords}")
         
         for kw in self.keywords:
             logger.info(f"キーワード「{kw}」で検索中...")
             # 最新の投稿を検索
-            tweets = self.api.search_tweets(query=kw, max_results=10, sort_order="recency")
+            tweets = self.api.search_tweets(query=kw, max_results=50, sort_order="recency")
             
             if not tweets:
                 continue
